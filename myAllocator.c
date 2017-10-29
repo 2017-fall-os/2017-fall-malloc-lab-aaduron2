@@ -191,6 +191,31 @@ BlockPrefix_t *findFirstFit(size_t s) {	/* find first block with usable space > 
     return growArena(s);
 }
 
+
+BlockPrefix_t *findBestFit(size_t s) {	/* find next block with best usable space >= s */
+  BlockPrefix_t *p = arenaBegin, *bestFit;
+  char best = 0, temp;
+  while (p) {
+    temp = s - computeUsableSpace(p);  /* Space wanted - usable space */
+    if (!p->allocated && computeUsableSpace(p) >= s && temp >= 0) {
+      if (best == 0) {
+	bestFit = p;
+	best = 1;
+      }
+      else if (computeUsableSpace(bestFit) > temp)  /* better space found */
+	bestFit = p;
+    }
+    if (p == arenaEnd) /* if no more blocks */
+      break;
+    p = getNextPrefix(p);
+  }
+  
+  if (bestFit != 0)
+    return bestFit;
+  
+  return growArena(s);
+}
+
 /* conversion between blocks & regions (offset of prefixSize */
 
 BlockPrefix_t *regionToPrefix(void *r) {
@@ -216,7 +241,7 @@ void *firstFitAllocRegion(size_t s) {
   BlockPrefix_t *p;
   if (arenaBegin == 0)		/* arena uninitialized? */
     initializeArena();
-  p = findFirstFit(s);		/* find a block */
+  p = findFirsFit(s);		/* find a block */
   if (p) {			/* found a block */
     size_t availSize = computeUsableSpace(p);
     if (availSize >= (asize + prefixSize + suffixSize + 8)) { /* split block? */
@@ -231,6 +256,28 @@ void *firstFitAllocRegion(size_t s) {
     return (void *)0;
   }
   
+}
+
+void *bestFitAllocRegion(size_t s) {
+size_t asize = align8(s);
+  BlockPrefix_t *p;
+  if (arenaBegin == 0)		/* arena uninitialized? */
+    initializeArena();
+  p = findBestFit(s);		/* find a block */
+  if (p) {			/* found a block */
+    size_t availSize = computeUsableSpace(p);
+    if (availSize >= (asize + prefixSize + suffixSize + 8)) { /* split block? */
+      void *freeSliverStart = (void *)p + prefixSize + suffixSize + asize;
+      void *freeSliverEnd = computeNextPrefixAddr(p);
+      makeFreeBlock(freeSliverStart, freeSliverEnd - freeSliverStart);
+      makeFreeBlock(p, freeSliverStart - (void *)p); /* piece being allocated */
+    }
+    p->allocated = 1;		/* mark as allocated */
+    return prefixToRegion(p);	/* convert to *region */
+  } else {			/* failed */
+    return (void *)0;
+  }
+
 }
 
 void freeRegion(void *r) {
