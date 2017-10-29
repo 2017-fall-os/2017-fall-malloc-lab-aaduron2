@@ -194,23 +194,24 @@ BlockPrefix_t *findFirstFit(size_t s) {	/* find first block with usable space > 
 
 BlockPrefix_t *findBestFit(size_t s) {	/* find next block with best usable space >= s */
   BlockPrefix_t *p = arenaBegin, *bestFit;
-  char best = 0, temp;
+  int best = 0, diff, min;
   while (p) {
-    temp = s - computeUsableSpace(p);  /* Space wanted - usable space */
-    if (!p->allocated && computeUsableSpace(p) >= s && temp >= 0) {
+    diff = computeUsableSpace(p) - s;  /* usable space - space wanted */
+    if (!p->allocated && computeUsableSpace(p) >= s) {
       if (best == 0) {
 	bestFit = p;
+	min = diff;
 	best = 1;
       }
-      else if (computeUsableSpace(bestFit) > temp)  /* better space found */
+      else if (diff < min) {  /* better space found */
 	bestFit = p;
+	min = diff;
+      }
     }
-    if (p == arenaEnd) /* if no more blocks */
-      break;
     p = getNextPrefix(p);
   }
   
-  if (bestFit != 0)
+  if (best != 0)
     return bestFit;
   
   return growArena(s);
@@ -298,7 +299,8 @@ void freeRegion(void *r) {
    TODO: if the successor 's' to r's block is free, and there is sufficient space
    in r + s, then just adjust sizes of r & s.
 */
-void *resizeRegion(void *r, size_t newSize) {
+
+void *voidresizeRegion(void *r, size_t newSize) {
   int oldSize;
   if (r != (void *)0)		/* old region existed */
     oldSize = computeUsableSpace(regionToPrefix(r));
@@ -308,7 +310,7 @@ void *resizeRegion(void *r, size_t newSize) {
     return r;
   else {			/* allocate new region & copy old data */
     char *o = (char *)r;	/* treat both regions as char* */
-    char *n = (char *)firstFitAllocRegion(newSize); 
+    char *n = (char *)bestFitAllocRegion(newSize); 
     int i;
     for (i = 0; i < oldSize; i++) /* copy byte-by-byte, should use memcpy */
       n[i] = o[i];
@@ -317,3 +319,42 @@ void *resizeRegion(void *r, size_t newSize) {
   }
 }
 
+
+/*
+  like realloc(r, newSize), resizeRegion will return a new region of size
+   newSize containing the old contents of r by:
+   1. checking if the present region has sufficient available space to
+   satisfy the request (if so, do nothing)
+   2. allocating a new region of sufficient size & copying the data
+   TODO: if the successor 's' to r's block is free, and there is sufficient space
+   in r + s, then just adjust sizes of r & s.
+*/
+
+void *resizeRegion(void *r, size_t newSize) {
+  int oldSize;
+  if (r != (void *)0)		/* old region existed */
+    oldSize = computeUsableSpace(regionToPrefix(r));
+  else
+    oldSize = 0;		/* non-existant regions have size 0 */
+  if (oldSize >= newSize)	/* old region is big enough */
+    return r;  
+  else {			/* allocate new region & copy old data */
+    BlockPrefix_t *s = getNextPrefix(r);            /* successor of r  */
+    if (s) {
+      if (!s->allocated) {
+	/* if sufficient space in r + s, adjust sizes of r & s */
+	if ((computeUsableSpace(regionToPrefix(r)) + computeUsableSpace(s)) >= newSize) {   
+	  coalescePrev(s);
+	  return r;
+	}
+      }
+    }
+    char *o = (char *)r;	/* treat both regions as char* */
+    char *n = (char *)bestFitAllocRegion(newSize); 
+    int i;
+    for (i = 0; i < oldSize; i++) /* copy byte-by-byte, should use memcpy */
+      n[i] = o[i];
+    freeRegion(o);		/* free old region */
+    return (void *)n;
+  }
+}
