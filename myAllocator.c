@@ -241,7 +241,7 @@ void *firstFitAllocRegion(size_t s) {
   BlockPrefix_t *p;
   if (arenaBegin == 0)		/* arena uninitialized? */
     initializeArena();
-  p = findFirsFit(s);		/* find a block */
+  p = findFirstFit(s);		/* find a block */
   if (p) {			/* found a block */
     size_t availSize = computeUsableSpace(p);
     if (availSize >= (asize + prefixSize + suffixSize + 8)) { /* split block? */
