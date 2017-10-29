@@ -194,18 +194,15 @@ BlockPrefix_t *findFirstFit(size_t s) {	/* find first block with usable space > 
 
 BlockPrefix_t *findBestFit(size_t s) {	/* find next block with best usable space >= s */
   BlockPrefix_t *p = arenaBegin, *bestFit;
-  int best = 0, diff, min;
+  int best = 0;
   while (p) {
-    diff = computeUsableSpace(p) - s;  /* usable space - space wanted */
     if (!p->allocated && computeUsableSpace(p) >= s) {
       if (best == 0) {
 	bestFit = p;
-	min = diff;
 	best = 1;
       }
-      else if (diff < min) {  /* better space found */
+      else if (computeUsableSpace(bestFit) > computeUsableSpace(p)) {  /* better space found */
 	bestFit = p;
-	min = diff;
       }
     }
     p = getNextPrefix(p);
@@ -339,12 +336,15 @@ void *resizeRegion(void *r, size_t newSize) {
   if (oldSize >= newSize)	/* old region is big enough */
     return r;  
   else {			/* allocate new region & copy old data */
-    BlockPrefix_t *s = getNextPrefix(r);            /* successor of r  */
+    BlockPrefix_t *cr = regionToPrefix(r);          /* current region */
+    BlockPrefix_t *s = getNextPrefix(cr);           /* successor of r  */
     if (s) {
       if (!s->allocated) {
-	/* if sufficient space in r + s, adjust sizes of r & s */
-	if ((computeUsableSpace(regionToPrefix(r)) + computeUsableSpace(s)) >= newSize) {   
+	/* if sufficient space in r + s, adjust sizes of r & s and allocate r */
+	if ((computeUsableSpace(cr) + computeUsableSpace(s)) >= newSize) {
+	  cr->allocated = 0;    /* if current is marked as allocated, can't coalesce with next block */
 	  coalescePrev(s);
+	  cr->allocated = 1;    /* current is marked allocated */
 	  return r;
 	}
       }
