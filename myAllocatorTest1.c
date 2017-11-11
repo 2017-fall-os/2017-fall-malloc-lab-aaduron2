@@ -20,7 +20,7 @@ void getutime(struct timeval *t)
 int main() 
 {
   /* Allocate memory and test bestFit */
-  void *p1, *p2, *p3, *p4, *p5, *p6;
+  void *p1, *p2, *p3, *p4, *p5, *p6, *p7;
   arenaCheck();
   p1 = bestFitAllocRegion(254);
   arenaCheck();
@@ -28,16 +28,13 @@ int main()
   arenaCheck();
   p3 = bestFitAllocRegion(264);
   arenaCheck();
-  p4 = bestFitAllocRegion(254);
+  p4 = bestFitAllocRegion(450);
   arenaCheck();
   p5 = bestFitAllocRegion(254);
   arenaCheck();
   p6 = bestFitAllocRegion(264);
-  printf("%8zx %8zx %8zx %8zx %8zx %8zx\n", p1, p2, p3, p4, p5, p6);
   arenaCheck();
-  freeRegion(p5);
-  arenaCheck();
-  freeRegion(p3);
+  printf("%8zx %8zx %8zx %8zx %8zx %8zx\n", p1, p2, p3, p4, p5, p6, p7);
   arenaCheck();
   p3 = bestFitAllocRegion(257);
   arenaCheck();
@@ -45,11 +42,15 @@ int main()
   arenaCheck();
   resizeRegion(p1, 20000);        /* Test modified resize region */
   arenaCheck();
-  freeRegion(p3);
+  freeRegion(p5);
+  arenaCheck();
+  resizeRegion(p4, 512);
   arenaCheck();
   freeRegion(p5);
   arenaCheck();
   freeRegion(p4);
+  arenaCheck();
+  freeRegion(p3);
   arenaCheck();
   freeRegion(p6);
   arenaCheck();

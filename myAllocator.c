@@ -196,13 +196,15 @@ BlockPrefix_t *findBestFit(size_t s) {	/* find next block with best usable space
   BlockPrefix_t *p = arenaBegin, *bestFit;
   int best = 0;
   while (p) {
-    if (!p->allocated && computeUsableSpace(p) >= s) {
+    if (!p->allocated && computeUsableSpace(p) == s) {
+        return p;
+    } else if (!p->allocated && computeUsableSpace(p) > s) {
       if (best == 0) {
-	bestFit = p;
-	best = 1;
+        bestFit = p;
+        best = 1;
       }
       else if (computeUsableSpace(bestFit) > computeUsableSpace(p)) {  /* better space found */
-	bestFit = p;
+        bestFit = p;
       }
     }
     p = getNextPrefix(p);
@@ -340,14 +342,31 @@ void *resizeRegion(void *r, size_t newSize) {
     BlockPrefix_t *s = getNextPrefix(cr);           /* successor of r  */
     if (s) {
       if (!s->allocated) {
-	/* if sufficient space in r + s, adjust sizes of r & s and allocate r */
-	if ((computeUsableSpace(cr) + computeUsableSpace(s)) >= newSize) {
-	  cr->allocated = 0;    /* if current is marked as allocated, can't coalesce with next block */
-	  coalescePrev(s);
-	  cr->allocated = 1;    /* current is marked allocated */
-	  return r;
-	}
-      }
+        /* if sufficient space in r + s, adjust sizes of r & s and allocate r */
+        if ((computeUsableSpace(cr) + computeUsableSpace(s)) >= newSize) {
+            size_t needSize = newSize - computeUsableSpace(cr),         /* size of space needed to coalese from successor */
+             remainder = computeUsableSpace(s) - needSize;              /* if there's a remainder, create new block of remainder size */
+            /* if remainder is 0, then just coalesce the successor into current */
+            if (remainder == 0) {
+                cr->allocated = 0;    /* if current is marked as allocated, can't coalesce with next block */
+                coalescePrev(s);
+                cr->allocated = 1;    /* current is marked allocated */   
+                return r;
+            } else {
+                /* Create new block with remainder (s - needSize) and coalesce r & s */
+                /* Used the method found in firstFitAllocRegion to create remainder block */
+                size_t asize = align8(needSize);
+                void *freeSliverStart = (void *)s + asize;
+                void *freeSliverEnd = computeNextPrefixAddr(s);
+                makeFreeBlock(freeSliverStart, freeSliverEnd - freeSliverStart);
+                makeFreeBlock(s, freeSliverStart - (void *)s);
+                cr->allocated = 0;
+                coalescePrev(s);
+                cr->allocated = 1;
+                return r;
+            }
+        }
+    }
     }
     char *o = (char *)r;	/* treat both regions as char* */
     char *n = (char *)bestFitAllocRegion(newSize); 
